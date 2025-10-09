@@ -109,7 +109,7 @@ if __name__ == "__main__":
     #mins
     window_size = 1
     step_size = 1
-    train_ratio = 1.0
+    train_ratio = 32000
 
     ########
     # count anomaly
@@ -184,7 +184,8 @@ if __name__ == "__main__":
                 f.write('\n')
 
     deeplog_file_generator_full(os.path.join(output_dir, 'train_with_time'), train, ['timestamp', 'LabelSeq', 'EventId', 'deltaT'])
-    deeplog_file_generator_full(os.path.join(output_dir, 'test_abnormal_with_time'), df_abnormal, ['timestamp', 'LabelSeq', 'EventId', 'deltaT'])
+    deeplog_file_generator_full(os.path.join(output_dir, 'valid_with_time'), test_normal, ['timestamp', 'LabelSeq', 'EventId', 'deltaT'])
+    # deeplog_file_generator_full(os.path.join(output_dir, 'test_abnormal_with_time'), df_abnormal, ['timestamp', 'LabelSeq', 'EventId', 'deltaT'])
 
 
 

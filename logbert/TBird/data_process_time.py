@@ -15,7 +15,7 @@ tqdm.pandas()
 pd.options.mode.chained_assignment = None  # default='warn'
 
 data_dir = os.path.expanduser("../dataset/tbird/")
-output_dir = "../output/tbird/sliding_window_60_30_6000/"
+output_dir = "../output/tbird/sliding_window_60_60_1.0/"
 raw_log_file = "Thunderbird.log"
 sample_log_file = "Thunderbird_20M.log"
 sample_window_size = 2*10**7
@@ -131,3 +131,55 @@ print("save df with column {}".format(column_name))
 print("training size {}".format(train_len))
 print("test normal size {}".format(normal_len - train_len))
 print('test abnormal size {}'.format(len(df_abnormal)))
+
+
+
+
+##########################
+# resolving the unique event id shows in training and validation
+import sys
+sys.path.append('../')
+
+import os
+import pandas as pd
+import numpy as np
+from logparser import Spell, Drain
+from tqdm import tqdm
+from logdeep.dataset.session import sliding_window
+
+tqdm.pandas()
+pd.options.mode.chained_assignment = None  # default='warn'
+
+data_dir = os.path.expanduser("../dataset/tbird/")
+output_dir = "../output/tbird/sliding_window_60_60_1.0/"
+raw_log_file = "Thunderbird.log"
+sample_log_file = "Thunderbird_20M.log"
+sample_window_size = 2*10**7
+sample_step_size = 10**4
+window_name = ''
+log_file = sample_log_file
+
+parser_type = 'drain'
+#mins
+window_size = 1
+step_size = 1
+# train_ratio = 1.0
+
+df = pd.read_csv(f'{output_dir}{log_file}_structured.csv')
+
+# data preprocess
+df["Label"] = df["Label"].apply(lambda x: int(x != "-"))
+
+df['datetime'] = pd.to_datetime(df["Date"] + " " + df['Time'], format='%Y-%m-%d %H:%M:%S')
+df['timestamp'] = df["datetime"].values.astype(np.int64) // 10 ** 9
+df['deltaT'] = df['datetime'].diff() / np.timedelta64(1, 's')
+df['deltaT'].fillna(0)
+
+deeplog_df = sliding_window(
+    df[["timestamp", "Label", "EventId", "deltaT"]],
+    para={"window_size": float(window_size)*60, "step_size": float(step_size) * 60})
+output_dir += window_name
+
+df_normal = deeplog_df[deeplog_df["Label"] == 0]
+df_abnormal = deeplog_df[deeplog_df["Label"] == 1]
+

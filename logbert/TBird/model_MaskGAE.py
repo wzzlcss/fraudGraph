@@ -255,7 +255,7 @@ class CondGAE(nn.Module):
         return self.loss_fn(pos_out, neg_out)
     
     @torch.no_grad()
-    def evaluate(self, x, input_edge, output_edge_pos, output_edge_neg):
+    def evaluate(self, x, input_edge, output_edge_pos, output_edge_neg, decoder_only=False):
         z = self.encoder(x, input_edge)
         pos_out = self.decoder(z, output_edge_pos, sigmoid=True)
         neg_out = self.decoder(z, output_edge_neg, sigmoid=True)
