@@ -166,3 +166,4 @@ data = {key: value.to(trainer.device) for key, value in data.items()}
 
 result = model.forward(data["bert_input"], data["time_input"])
 
+# data["bert_input"]

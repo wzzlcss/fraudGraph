@@ -101,8 +101,8 @@ with open(train_data_path, 'r') as f:
 with open(valid_data_path, 'r') as f:
     valid_iter = f.readlines()
 
-with open(data_path, 'r') as f:
-    data_iter = f.readlines()
+# with open(data_path, 'r') as f:
+#     data_iter = f.readlines()
 
 # embedding table trained from BERT used as input features
 feat = torch.load(emb_path)

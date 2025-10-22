@@ -1,0 +1,9 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.vscode/
+log/
+tpp_utils_seq2seq/layers/__pycache__/
+.idea
+tpp_utils_seq2seq/.DS_Store
