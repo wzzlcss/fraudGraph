@@ -35,6 +35,8 @@ class LogDataset(Dataset):
     def __getitem__(self, idx):
         k, t = self.log_corpus[idx], self.time_corpus[idx]
 
+        # k_label: 0 if not a masked token; 
+        # if not 0, the corresponding token has been masked and this is the original value
         k_masked, k_label, t_masked, t_label = self.random_item(k, t)
 
         # [CLS] tag = SOS tag, [SEP] tag = EOS tag
