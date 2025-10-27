@@ -37,7 +37,7 @@ parser.add_argument('--weight_decay', type=float, default=0.00)
 parser.add_argument('--warmup_steps', type=int, default=10000)
 parser.add_argument('--epochs', type=int, default=200)
 parser.add_argument('--n_epochs_stop', type=int, default=10)
-parser.add_argument('--exp_name', type=str, default="train_bert_embedding")
+parser.add_argument('--exp_name', type=str, default="exp2")
 args = parser.parse_args()
 
 def load_event(data_name, mode="train"):
@@ -86,8 +86,8 @@ def start_iteration(surfix_log, trainer):
             break
 
 def plot_train_valid_loss(surfix_log):
-    train_loss = pd.read_csv(bert_dir + f"train{surfix_log}.csv")
-    valid_loss = pd.read_csv(bert_dir + f"valid{surfix_log}.csv")
+    train_loss = pd.read_csv(bert_dir + f"train_{surfix_log}.csv")
+    valid_loss = pd.read_csv(bert_dir + f"valid_{surfix_log}.csv")
     sns.lineplot(x="epoch", y="loss", data=train_loss, label="train loss")
     sns.lineplot(x="epoch", y="loss", data=valid_loss, label="valid loss")
     plt.title("epoch vs train loss vs valid loss")
@@ -121,7 +121,7 @@ warmup_steps = args.warmup_steps
 with_cuda = True
 epochs = args.epochs
 n_epochs_stop = args.n_epochs_stop
-bert_dir = f"./{args.exp_name}/{data_name}/"
+bert_dir = f"./train_bert_embedding/{data_name}/{args.exp_name}/"
 
 seed_everything(seed=1234)
 save_parameters(args, bert_dir + "parameters.txt")
