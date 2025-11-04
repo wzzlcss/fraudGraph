@@ -241,12 +241,8 @@ class CondGAE(nn.Module):
         self.encoder.reset_parameters()
         self.edge_decoder.reset_parameters()
 
-    def forward(self, x, input_edge, output_edge, all_negatives, n_neg_per_pos = 5):
+    def forward(self, x, input_edge, output_edge, neg_samples):
         # sample same number of negative edges as the number of positive edges
-        num_negative_samples = output_edge.shape[1] * n_neg_per_pos
-        neg_samples_idx = torch.randint(
-            all_negatives.shape[1], (num_negative_samples,), device=all_negatives.device)
-        neg_samples = all_negatives[:, neg_samples_idx]
         # forward
         z = self.encoder(x, input_edge)
         pos_out = self.decoder(z, output_edge, sigmoid=True)

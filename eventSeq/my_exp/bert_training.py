@@ -176,3 +176,9 @@ trainer = BERTTrainer(
 start_iteration("bert", trainer)
 
 plot_train_valid_loss("bert")
+
+
+# save embedding
+# model = torch.load(f"./train_bert_embedding/{data_name}/exp3/bert_trained.pth", weights_only=False)
+# embedding = model.bert.embedding.token.weight.data
+# torch.save(embedding, f"./train_bert_embedding/{data_name}/exp3/embedding.pt")
