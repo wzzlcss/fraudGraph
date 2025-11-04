@@ -87,7 +87,7 @@ class GNNEncoder(nn.Module):
                 bn.reset_parameters()
 
     def forward(self, x, edge_index):
-        edge_index = to_sparse_tensor(edge_index, x.size(0))
+        # edge_index = to_sparse_tensor(edge_index, x.size(0))
 
         for i, conv in enumerate(self.convs[:-1]):
             x = self.dropout(x)
