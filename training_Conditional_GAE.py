@@ -1,4 +1,3 @@
-from tqdm import tqdm
 import numpy as np
 
 import torch
@@ -12,7 +11,6 @@ from torch.utils.data import DataLoader
 
 import random
 from sklearn.metrics import roc_auc_score
-import tqdm
 
 # from torch_geometric.utils import add_self_loops
 
@@ -170,7 +168,7 @@ for step, batch in enumerate(train_dataloader, start=1):
     demon = accum_steps if not is_last_chunk_step else remainder
     is_last_step = ((n + 1) == n_train_sample)
     # define training step
-    loss = model(x, input_edge, output_edge, all_negatives, n_neg_per_pos = 5)
+    loss = model(x, input_edge, output_edge, all_negatives, n_neg_per_pos = 1)
     loss = loss / demon
     loss.backward()
     running_loss += loss.item()
@@ -186,7 +184,7 @@ for step, batch in enumerate(train_dataloader, start=1):
         pred_curr_negative_in_common_positive = []
         # pred_relevant_negative = []
         y_list_cond = []; pred_list_cond = []
-        for _, batch in tqdm.tqdm(enumerate(valid_dataloader, start=1)[:10]):
+        for _, batch in enumerate(valid_dataloader, start=1):
             input_edge, output_edge = batch
             new_negative, curr_negative_in_common_positive = find_nontrivial_negative(
                 input_edge, output_edge, n, common_positive)
@@ -201,7 +199,7 @@ for step, batch in enumerate(train_dataloader, start=1):
             input_edge = torch.tensor(input_edge).to(device).to(dtype=torch.long)
             output_edge = torch.tensor(output_edge).to(device).to(dtype=torch.long)
             # overall auc, downsample negatives
-            num_sample = input_edge.shape[1] * 5
+            num_sample = input_edge.shape[1] * 1
             sample_idx = torch.randint(
                 all_negatives.shape[1], (num_sample,), device=all_negatives.device)
             neg_samples = all_negatives[:, sample_idx]
@@ -210,7 +208,7 @@ for step, batch in enumerate(train_dataloader, start=1):
             # evaluate certain kind of negative
             z = model.encoder(x, input_edge)
             if new_negative.size > 0:
-                pred_new_negative.append(evaluate_negative(z, negative))
+                pred_new_negative.append(evaluate_negative(z, new_negative))
             if curr_negative_in_common_positive.size > 0:
                 pred_curr_negative_in_common_positive.append(
                     evaluate_negative(z, curr_negative_in_common_positive)
