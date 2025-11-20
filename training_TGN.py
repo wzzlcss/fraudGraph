@@ -292,7 +292,35 @@ for epoch in range(nepochs):
 
 
 
+torch.save({
+    'args': args,
+    'train_loss': train_loss,
+    'valid_pr_auc': valid_pr_auc,
+    'valid_auc': valid_auc,
+}, 'amazon_TGN.pt')
 
+import matplotlib.pyplot as plt
+
+valid_idx = [i for i in range(len(valid_auc))]
+train_idx = [i for i in range(len(train_loss))]
+
+plt.clf()  
+plt.plot(valid_idx, valid_auc)
+plt.ylabel("ROC-AUC (validation)")
+plt.savefig(f'./valid_auc_amazon_TGN', bbox_inches='tight')
+plt.clf()   
+
+plt.clf()  
+plt.plot(valid_idx, valid_pr_auc)
+plt.ylabel("Average Precision (validation)")
+plt.savefig(f'./valid_ap_amazon_TGN', bbox_inches='tight')
+plt.clf()   
+
+plt.clf()  
+plt.plot(train_idx, train_loss)
+plt.ylabel("Training Loss")
+plt.savefig(f'./training_amazon_TGN', bbox_inches='tight')
+plt.clf()   
     
 
 # within a batch, egde is ordered by time
