@@ -51,6 +51,33 @@ class LogGraphDatasetAdjPair(Dataset):
             raise RuntimeError("should use a batch size of 1")
         return batch[0]
 
+class AdjPairLoader(Dataset):
+    def __init__(self, seq_pair: list[str], n: int):
+        self.seq_pair = seq_pair
+        self.n = n # total number of nodes
+
+    def __len__(self):
+        return len(self.seq_pair)
+
+    def __getitem__(self, idx: int):
+        input_seq, output_seq = self.seq_pair[idx]
+        adj_input = construct_adj(np.array(input_seq), self.n)
+        adj_output = construct_adj(np.array(output_seq), self.n)
+        return adj_input, adj_output
+
+    def collate(self, batch):
+        input_list = []
+        output_list = []
+        for adj_in, adj_out in batch:
+            input_list.append(torch.from_numpy(adj_in))
+            output_list.append(torch.from_numpy(adj_out))
+
+        # stack along batch dimension
+        input_adj = torch.stack(input_list, dim=0).to(torch.long)   # [B, N, N]
+        output_adj = torch.stack(output_list, dim=0).to(torch.long) # [B, N, N]
+
+        return input_adj, output_adj
+
 # # dataset preprocessing
 # import sys
 # sys.path.append('../')

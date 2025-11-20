@@ -2,6 +2,7 @@ import pickle
 import torch
 import numpy as np
 from .training_data_MaskGAE import LogGraphDatasetAdjPair
+from .training_data_MaskGAE import AdjPairLoader
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
@@ -49,4 +50,19 @@ def prepare_seq(data_name="amazon"):
     valid_data, valid_eventSeq = event_iter_to_seq_pair(test_iter)
     valid_set = LogGraphDatasetAdjPair(valid_data)
     valid_dataloader = DataLoader(valid_set, batch_size=1, num_workers=1, collate_fn=valid_set.collate)
+    return train_dataloader, valid_dataloader, train_eventSeq, valid_eventSeq, feat, n
+
+def prepare_seq_adj_batch(batch_size, data_name="amazon"):
+    train_iter, vocab_size = load_event(data_name, mode="train")
+    test_iter, test_size_2 = load_event(data_name, mode="test")
+    assert test_size_2==vocab_size, "vocab size in training and validation does not match"
+    emb_path = f'eventSeq/my_exp/train_bert_embedding/{data_name}/exp3/embedding.pt'
+    feat = torch.load(emb_path)
+    n = feat.shape[0] # size of embedding table
+    train_data, train_eventSeq = event_iter_to_seq_pair(train_iter)
+    train_set = AdjPairLoader(train_data, n)
+    train_dataloader = DataLoader(train_set, batch_size=batch_size, num_workers=1, collate_fn=train_set.collate)
+    valid_data, valid_eventSeq = event_iter_to_seq_pair(test_iter)
+    valid_set = AdjPairLoader(valid_data, n)
+    valid_dataloader = DataLoader(valid_set, batch_size=batch_size, num_workers=1, collate_fn=valid_set.collate)
     return train_dataloader, valid_dataloader, train_eventSeq, valid_eventSeq, feat, n

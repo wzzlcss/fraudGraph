@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 def construct_edge(node_seq):
     # given a event sequence, construct causal graph's edges (duplicates not removed)
@@ -8,6 +9,24 @@ def construct_edge(node_seq):
         from_node.append(node_seq[i])
         to_node.append(node_seq[i+1])
     return np.array([from_node, to_node], dtype=np.int64)
+
+def construct_adj(node_seq, n):
+    # given a event sequence, construct causal graph's adjacency (only indicates existence; diagonal is included)
+    adj = np.zeros((n, n))
+    for i in range(len(node_seq)-1):
+        adj[node_seq[i], node_seq[i+1]] = 1
+    return adj
+
+def adj_to_edge_index_list(adj_b):
+    # adj: batch of adj tensor
+    # find all i, j such that adj[i, j] != 0
+    edge_index_list = []
+    B = adj_b.shape[0]
+    for i in range(B):
+        src, dst = torch.nonzero(adj_b[i], as_tuple=True)
+        edge_index = torch.stack([src, dst], dim=0).long()
+        edge_index_list.append(edge_index)
+    return edge_index_list
 
 def keep_unique(edge_index):
     # return unique directed edges (np array)
