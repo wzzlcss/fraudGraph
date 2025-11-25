@@ -85,27 +85,41 @@ torch.save(training_loss, 'd3pm_training.pt')
 
 import matplotlib.pyplot as plt
 
+baseline_dm = torch.load('baseline_dm_training.pt')
+d3pm = torch.load('d3pm_training.pt')
+
+epoch_idx = [i for i in range(10)]
+iter_idx = [i for i in range(500)]
+
 plt.clf()  
-plt.plot([i for i in range(len(epoch_loss_list))], epoch_loss_list)
+plt.plot(epoch_idx, baseline_dm['train_epoch_loss'], label = "previous implementation")
+plt.plot(epoch_idx, d3pm['train_epoch_loss'], label = "current")
 plt.ylabel("Epoch Total Loss (On whole training set)")
 plt.xlabel("Epoch")
-plt.savefig(f'./epoch_loss', bbox_inches='tight')
+plt.legend()
+plt.savefig(f'./epoch_loss_compare', bbox_inches='tight')
 plt.clf()  
 
 
 plt.clf()  
-plt.plot([i for i in range(len(epoch_per_batch_loss_avg))], epoch_per_batch_loss_avg)
+plt.plot(epoch_idx, baseline_dm['train_epoch_avg_batch_loss'], label = "previous implementation")
+plt.plot(epoch_idx, d3pm['train_epoch_avg_batch_loss'], label = "current")
+plt.axhline(y=0.1, linestyle="--", label="0.1", color="red")
 plt.ylabel("Epoch Total Loss / Batch size (On whole training set)")
 plt.xlabel("Epoch")
-plt.savefig(f'./epoch_loss_avg_batch', bbox_inches='tight')
+plt.legend()
+plt.savefig(f'./epoch_loss_avg_batch_compare', bbox_inches='tight')
 plt.clf()  
 
 
 plt.clf()  
-plt.plot([i for i in range(len(one_batch_loss))], one_batch_loss, label="")
+plt.plot(iter_idx, baseline_dm['train_one_batch_size10_loss'], label = "previous implementation")
+plt.plot(iter_idx, d3pm['train_one_batch_size10_loss'], label = "current")
+plt.axhline(y=0.1, linestyle="--", label="0.1", color="red")
 plt.ylabel("Batch Loss (overfit one batch of size 10)")
 plt.xlabel("Iteration")
-plt.savefig(f'./loss_one_batch', bbox_inches='tight')
+plt.legend()
+plt.savefig(f'./loss_one_batch_compare', bbox_inches='tight')
 plt.clf()  
 
 # 3. randomize condition (for classifier-free guidance)

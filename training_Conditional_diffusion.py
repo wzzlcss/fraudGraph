@@ -22,7 +22,7 @@ parser.add_argument("--device", type=int, default=0)
 parser.add_argument("--batch_size", type=int, default=10)
 parser.add_argument("--T", type=int, default=100, help="total number of diffusion steps")
 parser.add_argument("--p_uncond", type=float, default=0.1, help="CF rate")
-parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate for training. (default: 1e-2)')
+parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate for training. (default: 1e-2)')
 parser.add_argument('--weight_decay', type=float, default=5e-5, help='weight_decay for training. (default: 5e-5)')
 # gnn encoder
 parser.add_argument('--bn', action='store_true', help='Whether to use batch normalization for GNN encoder. (default: False)')
@@ -98,16 +98,40 @@ def sample_next_graph(model, batch, feat, gammas, T):
 
 
 model.train()
-for epoch in range(50):
+
+epoch_loss_list = []
+epoch_per_batch_loss_avg = []
+for epoch in range(10):
     epoch_loss = 0.0
     for step, batch in enumerate(train_dataloader, start=1):
-        loss = training_step(model, batch, feat, gammas, T, p_uncond)
+        loss = training_step(model, batch, feat, gammas, T)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         epoch_loss += loss.item()
+    epoch_loss_list.append(epoch_loss)
+    epoch_per_batch_loss_avg.append(epoch_loss/step)
     ###
-    print(f"[epoch]: {epoch_loss}")
+    print(f"[epoch]: {epoch_loss}; avg_batch_loss: {epoch_loss/step}")
+
+
+# test overfitting one batch
+model.train()
+batch = next(iter(train_dataloader))
+one_batch_loss = []
+for it in range(500):
+    loss = training_step(model, batch, feat, gammas, T)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    one_batch_loss.append(loss.item())
+    print(f'batch loss: {loss.item()}')
+
+training_loss = {
+    'train_epoch_loss': epoch_loss_list, 
+    'train_epoch_avg_batch_loss': epoch_per_batch_loss_avg,
+    'train_one_batch_size10_loss': one_batch_loss}
+torch.save(training_loss, 'baseline_dm_training.pt')
 
 # 3. randomize condition (for classifier-free guidance)
 # use_uncond = (torch.rand(batch_size, device=device) < p_uncond)
