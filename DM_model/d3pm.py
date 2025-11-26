@@ -97,9 +97,39 @@ class DMModel(nn.Module):
         # self.log("train/loss", loss)
         return loss
 
-    # def categorical_denoise_step(self, points, xt, t, device, edge_index=None, target_t=None):
+    def categorical_denoise_step(self, t1, t2, feat_batch, xt, adj_cond):
+        with torch.no_grad():
+            t1 = torch.from_numpy(t1).view(1)
+            x0_pred = self.forward(
+                feat_batch.float().to(self.device),
+                xt.float().to(self.device),
+                adj_cond.float().to(self.device),
+                t1.float().to(self.device),
+            )
+            x0_pred_prob = x0_pred.permute((0, 2, 3, 1)).contiguous().softmax(dim=-1)
+            xt = self.categorical_posterior(
+                target_t=t2, t=t1, x0_pred_prob=x0_pred_prob.cpu(), xt=xt)
+        return xt
 
+    def test_set(self, batch, feat_batch):
+        adj_in, adj_out = batch # adj_out: target clean adj; adj_in: conditional adj
+        # start from a pure random graph
+        xt = torch.randn_like(adj_out.float())
+        xt = (xt > 0).long() # this maps to {0, 1} but in training, eges are in {-1, 1} + noise
+        steps = self.args.inference_diffusion_steps
+        time_schedule = InferenceSchedule(
+            inference_schedule=self.args.inference_schedule,
+            T=self.diffusion.T, inference_T=steps)
+        # diffusion iteration
+        for i in range(steps):
+            t1, t2 = time_schedule(i)
+            t1 = np.array([t1]).astype(int)
+            t2 = np.array([t2]).astype(int)
+            adj_cond = adj_in
+            # update
+            xt = self.categorical_denoise_step(t1, t2, feat_batch, xt, adj_cond) # change and implement this
 
-    # def test_set():
+        adj_mat = xt.float().cpu().detach().numpy()
+        return adj_mat
 
 

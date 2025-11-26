@@ -29,7 +29,25 @@ parser.add_argument("--aggregation", type=str, default="sum", help="aggregation 
 # parser.add_argument("--p_uncond", type=float, default=0.1, help="CF rate")
 parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate for training. (default: 1e-2)')
 parser.add_argument('--weight_decay', type=float, default=5e-5, help='weight_decay for training. (default: 5e-5)')
+# parallel sampling
+parser.add_argument('--parallel_sampling', type=int, default=1)
+parser.add_argument('--inference_diffusion_steps', type=int, default=1000)
+parser.add_argument('--inference_schedule', type=str, default="cosine")
 args = parser.parse_args()
+
+def compute_batch_auc(y_list, pred_list):
+    all_pred = torch.cat(pred_list, dim=0)
+    all_y = torch.cat(y_list, dim=0)
+    all_y, all_pred = all_y.cpu().numpy(), all_pred.cpu().numpy()
+    auc = roc_auc_score(all_y, all_pred)
+    return auc
+
+def compute_batch_pr_auc(y_list, pred_list):
+    all_pred = torch.cat(pred_list, dim=0)
+    all_y = torch.cat(y_list, dim=0)
+    all_y, all_pred = all_y.cpu().numpy(), all_pred.cpu().numpy()
+    pr_auc = average_precision_score(all_y, all_pred)
+    return pr_auc
 
 device = f"cuda:{args.device}" if torch.cuda.is_available() else "cpu"
 
@@ -48,9 +66,7 @@ optimizer = torch.optim.Adam(
 
 dm_model.model.train()
 
-epoch_loss_list = []
-epoch_per_batch_loss_avg = []
-
+valid_auc = []; valid_pr_auc = []
 for epoch in range(10):
     epoch_loss = 0.0
     for step, batch in enumerate(train_dataloader, start=1):
@@ -59,68 +75,27 @@ for epoch in range(10):
         loss.backward()
         optimizer.step()
         epoch_loss += loss.item()
-    epoch_loss_list.append(epoch_loss)
-    epoch_per_batch_loss_avg.append(epoch_loss/step)
     ###
     print(f"[epoch]: {epoch_loss}; avg_batch_loss: {epoch_loss/step}")
-
-
-# test overfitting one batch
-batch = next(iter(train_dataloader))
-one_batch_loss = []
-for it in range(500):
-    loss = dm_model.categorical_training_step(batch, feat_batch)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    one_batch_loss.append(loss.item())
-    print(f'batch loss: {loss.item()}')
-
-training_loss = {
-    'train_epoch_loss': epoch_loss_list, 
-    'train_epoch_avg_batch_loss': epoch_per_batch_loss_avg,
-    'train_one_batch_size10_loss': one_batch_loss}
-torch.save(training_loss, 'd3pm_training.pt')
+    # eval
+    dm_model.model.eval()
+    y_list_cond = []; pred_list_cond = []
+    for _, batch in enumerate(valid_dataloader, start=1):
+        edge_pred = dm_model.test_set(batch, feat_batch) # [B, N, N] prob of edge=1
+        edge_pred = torch.tensor(edge_pred)
+        _, output_adj = batch
+        y_list_cond.append(output_adj.reshape(-1, 1))
+        pred_list_cond.append(edge_pred.reshape(-1, 1))
+    ####
+    auc_cond = compute_batch_auc(y_list_cond, pred_list_cond)
+    valid_auc.append(auc_cond)
+    pr_auc_cond = compute_batch_pr_auc(y_list_cond, pred_list_cond)
+    valid_pr_auc.append(pr_auc_cond)
+    print(f"Epoch: {epoch+1}; validation roc_auc (true condition): {auc_cond}; pr auc: {pr_auc_cond}")
+    dm_model.model.train()
 
 
 import matplotlib.pyplot as plt
-
-baseline_dm = torch.load('baseline_dm_training.pt')
-d3pm = torch.load('d3pm_training.pt')
-
-epoch_idx = [i for i in range(10)]
-iter_idx = [i for i in range(500)]
-
-plt.clf()  
-plt.plot(epoch_idx, baseline_dm['train_epoch_loss'], label = "previous implementation")
-plt.plot(epoch_idx, d3pm['train_epoch_loss'], label = "current")
-plt.ylabel("Epoch Total Loss (On whole training set)")
-plt.xlabel("Epoch")
-plt.legend()
-plt.savefig(f'./epoch_loss_compare', bbox_inches='tight')
-plt.clf()  
-
-
-plt.clf()  
-plt.plot(epoch_idx, baseline_dm['train_epoch_avg_batch_loss'], label = "previous implementation")
-plt.plot(epoch_idx, d3pm['train_epoch_avg_batch_loss'], label = "current")
-plt.axhline(y=0.1, linestyle="--", label="0.1", color="red")
-plt.ylabel("Epoch Total Loss / Batch size (On whole training set)")
-plt.xlabel("Epoch")
-plt.legend()
-plt.savefig(f'./epoch_loss_avg_batch_compare', bbox_inches='tight')
-plt.clf()  
-
-
-plt.clf()  
-plt.plot(iter_idx, baseline_dm['train_one_batch_size10_loss'], label = "previous implementation")
-plt.plot(iter_idx, d3pm['train_one_batch_size10_loss'], label = "current")
-plt.axhline(y=0.1, linestyle="--", label="0.1", color="red")
-plt.ylabel("Batch Loss (overfit one batch of size 10)")
-plt.xlabel("Iteration")
-plt.legend()
-plt.savefig(f'./loss_one_batch_compare', bbox_inches='tight')
-plt.clf()  
 
 # 3. randomize condition (for classifier-free guidance)
 # use_uncond = (torch.rand(batch_size, device=device) < p_uncond)
