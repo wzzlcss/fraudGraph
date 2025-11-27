@@ -80,7 +80,8 @@ for epoch in range(10):
     # eval
     dm_model.model.eval()
     y_list_cond = []; pred_list_cond = []
-    for _, batch in enumerate(valid_dataloader, start=1):
+    for valid_step, batch in enumerate(valid_dataloader, start=1):
+        print(f"{valid_step}/{len(valid_dataloader)}", end='\r')
         edge_pred = dm_model.test_set(batch, feat_batch) # [B, N, N] prob of edge=1
         edge_pred = torch.tensor(edge_pred)
         _, output_adj = batch
@@ -94,8 +95,31 @@ for epoch in range(10):
     print(f"Epoch: {epoch+1}; validation roc_auc (true condition): {auc_cond}; pr auc: {pr_auc_cond}")
     dm_model.model.train()
 
+validation = {
+    'valid_auc': valid_auc, 
+    'valid_pr_auc': valid_pr_auc}
+torch.save(validation, 'd3pm_validation.pt')
 
 import matplotlib.pyplot as plt
+
+idx = [i for i in range(len(valid_auc))]
+
+plt.clf()  
+plt.plot(idx, valid_auc)
+plt.ylabel("ROC-AUC")
+plt.xlabel("Epoch")
+plt.title(f'Best: {max(valid_auc)}')
+plt.savefig(f'./validation_roc_auc', bbox_inches='tight')
+plt.clf()  
+
+
+plt.clf()  
+plt.plot(idx, valid_pr_auc)
+plt.ylabel("Average precision score")
+plt.xlabel("Epoch")
+plt.title(f'Best: {max(valid_pr_auc)}')
+plt.savefig(f'./validation_ap', bbox_inches='tight')
+plt.clf()  
 
 # 3. randomize condition (for classifier-free guidance)
 # use_uncond = (torch.rand(batch_size, device=device) < p_uncond)
