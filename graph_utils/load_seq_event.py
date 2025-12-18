@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from .training_data_MaskGAE import LogGraphDatasetAdjPair
 from .training_data_MaskGAE import AdjPairLoader
+from .training_data_MaskGAE import AdjPairLoader_Temporal
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
@@ -66,3 +67,23 @@ def prepare_seq_adj_batch(batch_size, data_name="amazon"):
     valid_set = AdjPairLoader(valid_data, n)
     valid_dataloader = DataLoader(valid_set, batch_size=batch_size, num_workers=1, collate_fn=valid_set.collate)
     return train_dataloader, valid_dataloader, train_eventSeq, valid_eventSeq, feat, n
+
+def to_dataloader_temporal(data_iter):
+    data, eventSeq = event_iter_to_seq_pair(data_iter)
+    dataset = AdjPairLoader_Temporal(data)
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=1, collate_fn=dataset.collate)
+    return dataloader
+
+
+def prepare_seq_temporal(data_name="amazon"):
+    train_iter, vocab_size = load_event(data_name, mode="train")
+    valid_iter, valid_size = load_event(data_name, mode="dev")
+    test_iter, test_size = load_event(data_name, mode="test")
+    assert (test_size==vocab_size) and (valid_size==vocab_size), "vocab size does not match"
+    emb_path = f'eventSeq/my_exp/train_bert_embedding/{data_name}/exp3/embedding.pt'
+    feat = torch.load(emb_path)
+    n = feat.shape[0] # size of embedding table
+    train_dataloader = to_dataloader_temporal(train_iter)
+    valid_dataloader = to_dataloader_temporal(valid_iter)
+    test_dataloader = to_dataloader_temporal(test_iter)
+    return train_dataloader, valid_dataloader, test_dataloader, feat, n

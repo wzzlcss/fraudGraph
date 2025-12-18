@@ -51,6 +51,30 @@ class LogGraphDatasetAdjPair(Dataset):
             raise RuntimeError("should use a batch size of 1")
         return batch[0]
 
+class AdjPairLoader_Temporal(Dataset):
+    def __init__(self, seq_pair: list[str]):
+        self.seq_pair = seq_pair
+    
+    def __len__(self):
+        return len(self.seq_pair)
+
+    def __getitem__(self, idx: int):
+        input_seq, output_seq = self.seq_pair[idx]
+        # keep duplicated and edges are returned in temporal order
+        edge_index_input = construct_edge(np.array(input_seq))
+        edge_index_output = construct_edge(np.array(output_seq))
+        # create dummy edge features of the whole
+        num_t = edge_index_input.shape[1] + edge_index_output.shape[1]
+        timeline = np.arange(num_t)
+        edge_ids = np.arange(num_t)
+        return edge_index_input, edge_index_output, timeline, edge_ids
+    
+    def collate(self, batch):
+        # gnn conv is defined for single graph pair input; always use batch size of 1
+        if len(batch) > 1:
+            raise RuntimeError("should use a batch size of 1")
+        return batch[0]
+
 class AdjPairLoader(Dataset):
     def __init__(self, seq_pair: list[str], n: int):
         self.seq_pair = seq_pair
