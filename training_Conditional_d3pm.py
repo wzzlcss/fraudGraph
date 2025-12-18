@@ -100,7 +100,7 @@ for epoch in range(args.num_epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        print(f"Avg Batch Loss ({step} / {len(train_dataloader)} Batch): {loss.item()}")
+        logging.info(f"Avg Batch Loss ({step} / {len(train_dataloader)} Batch): {loss.item()}")
         train_loss.append(loss.item())
     # eval
     dm_model.model.eval()

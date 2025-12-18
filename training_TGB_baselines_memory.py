@@ -41,15 +41,15 @@ parser.add_argument('--time_scaling_factor', default=1e-6, type=float, help='the
     'a large time_scaling_factor tends to sample more on recent links, 0.0 corresponds to uniform sampling, '
     'it works when sample_neighbor_strategy == time_interval_aware')  
 parser.add_argument('--num_neighbors', type=int, default=20,  help='number of neighbors to sample for each node')  
-parser.add_argument('--time_feat_dim', type=int, default=100, help='dimension of the time embedding')
-parser.add_argument('--num_heads', type=int, default=1, help='number of heads used in attention layer')
+parser.add_argument('--time_feat_dim', type=int, default=128, help='dimension of the time embedding')
+parser.add_argument('--num_heads', type=int, default=2, help='number of heads used in attention layer')
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
 parser.add_argument('--num_layers', type=int, default=2, help='number of model layers')
 # optimization
 parser.add_argument('--optimizer', type=str, default='Adam',
     choices=['SGD', 'Adam', 'RMSprop'], help='name of optimizer')
 parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate')
-parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay')
+parser.add_argument('--weight_decay', type=float, default=5e-5, help='weight decay')
 args = parser.parse_args()
 
 # sequence-level training
@@ -218,10 +218,37 @@ def eval_static(seq):
         [torch.ones_like(pos_prob), torch.zeros_like(neg_prob)], dim=0)
     return predicts.detach().cpu(), labels.cpu()
 
+def eval_dataloader(dataloader):
+    y_list_cond = []; pred_list_cond = []
+    for _, seq in enumerate(dataloader, start=1):
+        print(_, end='\r')
+        predicts, labels = eval_static(seq)
+        y_list_cond.append(labels)
+        pred_list_cond.append(predicts)
+    ####
+    auc_cond = compute_batch_auc(y_list_cond, pred_list_cond)
+    pr_auc_cond = compute_batch_pr_auc(y_list_cond, pred_list_cond)
+    return auc_cond, pr_auc_cond
+
+### logging
+run_id = np.random.randint(10000, 99999)
+now = datetime.datetime.now()
+output_path = os.getcwd()
+output_path = os.path.join(
+    output_path, "runs", "run_" + str(now.day) + "." + str(now.month) +
+        "." + str(now.year) + "_" + str(run_id))
+os.makedirs(os.path.join(output_path, "models"))
+logging.basicConfig(
+    filename=os.path.join(output_path, "log_" + str(run_id) + ".txt"), filemode='w',
+    level=logging.INFO, format='[%(levelname)s]%(message)s')
+for arg in sorted(vars(args)):
+    logging.info("{0}: {1}".format(arg, getattr(args, arg)))
+
+logging.info("----------")
 
 device = f"cuda:{args.device}" if torch.cuda.is_available() else "cpu"
 
-train_dataloader, valid_dataloader, train_eventSeq, valid_eventSeq, feat, N = prepare_seq_temporal(
+train_dataloader, valid_dataloader, test_dataloader, feat, N = prepare_seq_temporal(
     data_name=args.dataset_name)
 
 # DGB assume the node index start from 1; add a dummy row to ensure correct node feat is used
@@ -264,6 +291,8 @@ assert n_train_sample % args.batch_size == 0, \
 # outer loop: Each sequence is independent.
 # perform back-propagation once batch_size num of seq is processed
 train_loss = []
+valid_auc_list = []; valid_pa = []
+test_auc_list = []; test_pa = []
 for epoch in range(args.num_epochs):
     model.train()
     running_loss = 0.0
@@ -286,13 +315,22 @@ for epoch in range(args.num_epochs):
             running_loss = 0.0
     # validation after each epoch
     model.eval()
-    y_list_cond = []; pred_list_cond = []
-    for _, valid_seq in enumerate(valid_dataloader, start=1):
-        print(_, end='\r')
-        predicts, labels = eval_static(valid_seq)
-        y_list_cond.append(labels)
-        pred_list_cond.append(predicts)
+    valid_auc_cond, valid_pr_auc_cond = eval_dataloader(valid_dataloader)
+    test_auc_cond, test_pr_auc_cond = eval_dataloader(test_dataloader)
+    logging.info(f"Step: {epoch+1}; validation roc_auc (true condition): {valid_auc_cond}; pr auc: {valid_pr_auc_cond}")
+    logging.info(f"Step: {epoch+1}; test roc_auc (true condition): {test_auc_cond}; pr auc: {test_pr_auc_cond}")
+    valid_auc_list.append(valid_auc_cond); valid_pa.append(valid_pr_auc_cond)
+    test_auc_list.append(test_auc_cond); test_pa.append(test_pr_auc_cond)
     ####
-    auc_cond = compute_batch_auc(y_list_cond, pred_list_cond)
-    pr_auc_cond = compute_batch_pr_auc(y_list_cond, pred_list_cond)
-    print(f"Step: {epoch+1}; validation roc_auc (true condition): {auc_cond}; pr auc: {pr_auc_cond}")
+
+res = {
+    "args": args, 
+    "train_loss": train_loss, 
+    "valid_auc_list": valid_auc_list,
+    "valid_pa": valid_pa,
+    "test_auc_list": test_auc_list,
+    "test_pa": test_pa}
+
+filename = f"{output_path}/{args.dataset_name}_{args.model_name}.pt"
+torch.save(res, filename)
+
