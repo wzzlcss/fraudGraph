@@ -53,27 +53,34 @@ def prepare_seq(data_name="amazon"):
     valid_dataloader = DataLoader(valid_set, batch_size=1, num_workers=1, collate_fn=valid_set.collate)
     return train_dataloader, valid_dataloader, train_eventSeq, valid_eventSeq, feat, n
 
+def to_dataloader_adj(data_iter, n, batch_size):
+    data, eventSeq = event_iter_to_seq_pair(data_iter)
+    dataset = AdjPairLoader(data, n)
+    dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=1, collate_fn=dataset.collate)
+    return dataloader
+
 def prepare_seq_adj_batch(batch_size, data_name="amazon"):
     train_iter, vocab_size = load_event(data_name, mode="train")
-    test_iter, test_size_2 = load_event(data_name, mode="test")
-    assert test_size_2==vocab_size, "vocab size in training and validation does not match"
+    valid_iter, valid_size = load_event(data_name, mode="dev")
+    test_iter, test_size = load_event(data_name, mode="test")
+    assert (test_size==vocab_size) and (valid_size==vocab_size), "vocab size does not match"
     emb_path = f'eventSeq/my_exp/train_bert_embedding/{data_name}/exp3/embedding.pt'
     feat = torch.load(emb_path)
     n = feat.shape[0] # size of embedding table
-    train_data, train_eventSeq = event_iter_to_seq_pair(train_iter)
-    train_set = AdjPairLoader(train_data, n)
-    train_dataloader = DataLoader(train_set, batch_size=batch_size, num_workers=1, collate_fn=train_set.collate)
-    valid_data, valid_eventSeq = event_iter_to_seq_pair(test_iter)
-    valid_set = AdjPairLoader(valid_data, n)
-    valid_dataloader = DataLoader(valid_set, batch_size=batch_size, num_workers=1, collate_fn=valid_set.collate)
-    return train_dataloader, valid_dataloader, train_eventSeq, valid_eventSeq, feat, n
+    n_train_sample = len(train_iter)
+    assert n_train_sample % batch_size == 0, \
+        f"train length ({n_train_sample}) must be divisible by batch_size ({batch_size})"
+    ####
+    train_dataloader = to_dataloader_adj(train_iter, n, batch_size)
+    valid_dataloader = to_dataloader_adj(valid_iter, n, batch_size)
+    test_dataloader = to_dataloader_adj(test_iter, n, batch_size)
+    return train_dataloader, valid_dataloader, test_dataloader, feat, n
 
 def to_dataloader_temporal(data_iter):
     data, eventSeq = event_iter_to_seq_pair(data_iter)
     dataset = AdjPairLoader_Temporal(data)
     dataloader = DataLoader(dataset, batch_size=1, num_workers=1, collate_fn=dataset.collate)
     return dataloader
-
 
 def prepare_seq_temporal(data_name="amazon"):
     train_iter, vocab_size = load_event(data_name, mode="train")

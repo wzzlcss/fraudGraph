@@ -5,6 +5,10 @@ import torch
 import argparse
 from torch import Tensor
 
+import logging
+import datetime
+import os
+
 from graph_utils.load_seq_event import *
 from graph_utils.edge_selection import *
 
@@ -15,14 +19,16 @@ from sklearn.metrics import roc_auc_score
 from sklearn.metrics import precision_recall_curve, average_precision_score
 
 from DM_model.d3pm import DMModel
+from utils import compute_batch_auc, compute_batch_pr_auc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--device", type=int, default=0)
-parser.add_argument("--batch_size", type=int, default=10)
+parser.add_argument("--batch_size", type=int, default=100)
+parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='amazon')
 parser.add_argument("--diffusion_steps", type=int, default=1000, help="total number of diffusion steps")
 parser.add_argument("--diffusion_schedule", type=str, default="cosine", help="diffusion schedule: linear or cosine")
 # backbone GNN
-parser.add_argument("--n_layers", type=int, default=12, help="num of GNN layers")
+parser.add_argument("--n_layers", type=int, default=8, help="num of GNN layers")
 parser.add_argument("--in_channels", type=int, default=32, help="hidden size")
 parser.add_argument("--hidden_dim", type=int, default=128, help="hidden size")
 parser.add_argument("--aggregation", type=str, default="sum", help="aggregation method")
@@ -35,26 +41,42 @@ parser.add_argument('--inference_diffusion_steps', type=int, default=1000)
 parser.add_argument('--inference_schedule', type=str, default="cosine")
 args = parser.parse_args()
 
-def compute_batch_auc(y_list, pred_list):
-    all_pred = torch.cat(pred_list, dim=0)
-    all_y = torch.cat(y_list, dim=0)
-    all_y, all_pred = all_y.cpu().numpy(), all_pred.cpu().numpy()
-    auc = roc_auc_score(all_y, all_pred)
-    return auc
+def eval_dataloader(dataloader):
+    y_list_cond = []; pred_list_cond = []
+    for _, batch in enumerate(dataloader, start=1):
+        print(f"{_}/{len(dataloader)}", end='\r')
+        edge_pred = dm_model.test_set(batch, feat_batch) # [B, N, N] prob of edge=1
+        edge_pred = torch.tensor(edge_pred)
+        __, output_adj = batch
+        y_list_cond.append(output_adj.reshape(-1, 1))
+        pred_list_cond.append(edge_pred.reshape(-1, 1)) 
+    ###
+    auc_cond = compute_batch_auc(y_list_cond, pred_list_cond)
+    pr_auc_cond = compute_batch_pr_auc(y_list_cond, pred_list_cond)
+    return auc_cond, pr_auc_cond
 
-def compute_batch_pr_auc(y_list, pred_list):
-    all_pred = torch.cat(pred_list, dim=0)
-    all_y = torch.cat(y_list, dim=0)
-    all_y, all_pred = all_y.cpu().numpy(), all_pred.cpu().numpy()
-    pr_auc = average_precision_score(all_y, all_pred)
-    return pr_auc
+### logging
+run_id = np.random.randint(10000, 99999)
+now = datetime.datetime.now()
+output_path = os.getcwd()
+output_path = os.path.join(
+    output_path, "runs", "run_" + str(now.day) + "." + str(now.month) +
+        "." + str(now.year) + "_" + str(run_id))
+os.makedirs(os.path.join(output_path, "models"))
+logging.basicConfig(
+    filename=os.path.join(output_path, "log_" + str(run_id) + ".txt"), filemode='w',
+    level=logging.INFO, format='[%(levelname)s]%(message)s')
+for arg in sorted(vars(args)):
+    logging.info("{0}: {1}".format(arg, getattr(args, arg)))
+
+logging.info("----------")
 
 device = f"cuda:{args.device}" if torch.cuda.is_available() else "cpu"
 
 batch_size=args.batch_size
 
-train_dataloader, valid_dataloader, train_eventSeq, valid_eventSeq, feat, n = prepare_seq_adj_batch(
-    batch_size=batch_size, data_name="amazon")
+train_dataloader, valid_dataloader, test_dataloader, feat, N = prepare_seq_adj_batch(
+    batch_size=args.batch_size, data_name=args.dataset_name)
 
 # feat is shared and fixed for every adj
 feat_batch = feat.unsqueeze(0).repeat(batch_size, 1, 1)
@@ -66,60 +88,61 @@ optimizer = torch.optim.Adam(
 
 dm_model.model.train()
 
-valid_auc = []; valid_pr_auc = []
-for epoch in range(10):
-    epoch_loss = 0.0
+train_loss = []
+valid_auc_list = []; valid_pa = []
+test_auc_list = []; test_pa = []
+
+for epoch in range(args.num_epochs):
     for step, batch in enumerate(train_dataloader, start=1):
         loss = dm_model.categorical_training_step(batch, feat_batch)
+        loss = loss / args.batch_size
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        epoch_loss += loss.item()
-    ###
-    print(f"[epoch]: {epoch_loss}; avg_batch_loss: {epoch_loss/step}")
+        print(f"Avg Batch Loss ({step} / {len(train_dataloader)} Batch): {loss.item()}")
+        train_loss.append(loss.item())
     # eval
     dm_model.model.eval()
-    y_list_cond = []; pred_list_cond = []
-    for valid_step, batch in enumerate(valid_dataloader, start=1):
-        print(f"{valid_step}/{len(valid_dataloader)}", end='\r')
-        edge_pred = dm_model.test_set(batch, feat_batch) # [B, N, N] prob of edge=1
-        edge_pred = torch.tensor(edge_pred)
-        _, output_adj = batch
-        y_list_cond.append(output_adj.reshape(-1, 1))
-        pred_list_cond.append(edge_pred.reshape(-1, 1))
-    ####
-    auc_cond = compute_batch_auc(y_list_cond, pred_list_cond)
-    valid_auc.append(auc_cond)
-    pr_auc_cond = compute_batch_pr_auc(y_list_cond, pred_list_cond)
-    valid_pr_auc.append(pr_auc_cond)
-    print(f"Epoch: {epoch+1}; validation roc_auc (true condition): {auc_cond}; pr auc: {pr_auc_cond}")
+    valid_auc_cond, valid_pr_auc_cond = eval_dataloader(valid_dataloader)
+    test_auc_cond, test_pr_auc_cond = eval_dataloader(test_dataloader)
+    logging.info(f"Step: {epoch+1}; validation roc_auc (true condition): {valid_auc_cond}; pr auc: {valid_pr_auc_cond}")
+    logging.info(f"Step: {epoch+1}; test roc_auc (true condition): {test_auc_cond}; pr auc: {test_pr_auc_cond}")
+    valid_auc_list.append(valid_auc_cond); valid_pa.append(valid_pr_auc_cond)
+    test_auc_list.append(test_auc_cond); test_pa.append(test_pr_auc_cond)
     dm_model.model.train()
 
-validation = {
-    'valid_auc': valid_auc, 
-    'valid_pr_auc': valid_pr_auc}
-torch.save(validation, 'd3pm_validation.pt')
+res = {
+    "args": args, 
+    "train_loss": train_loss, 
+    "valid_auc_list": valid_auc_list,
+    "valid_pa": valid_pa,
+    "test_auc_list": test_auc_list,
+    "test_pa": test_pa}
 
-import matplotlib.pyplot as plt
-
-idx = [i for i in range(len(valid_auc))]
-
-plt.clf()  
-plt.plot(idx, valid_auc)
-plt.ylabel("ROC-AUC")
-plt.xlabel("Epoch")
-plt.title(f'Best: {max(valid_auc)}')
-plt.savefig(f'./validation_roc_auc', bbox_inches='tight')
-plt.clf()  
+filename = f"{output_path}/{args.dataset_name}_{args.model_name}.pt"
+torch.save(res, filename)
 
 
-plt.clf()  
-plt.plot(idx, valid_pr_auc)
-plt.ylabel("Average precision score")
-plt.xlabel("Epoch")
-plt.title(f'Best: {max(valid_pr_auc)}')
-plt.savefig(f'./validation_ap', bbox_inches='tight')
-plt.clf()  
+# import matplotlib.pyplot as plt
+
+# idx = [i for i in range(len(valid_auc))]
+
+# plt.clf()  
+# plt.plot(idx, valid_auc)
+# plt.ylabel("ROC-AUC")
+# plt.xlabel("Epoch")
+# plt.title(f'Best: {max(valid_auc)}')
+# plt.savefig(f'./validation_roc_auc', bbox_inches='tight')
+# plt.clf()  
+
+
+# plt.clf()  
+# plt.plot(idx, valid_pr_auc)
+# plt.ylabel("Average precision score")
+# plt.xlabel("Epoch")
+# plt.title(f'Best: {max(valid_pr_auc)}')
+# plt.savefig(f'./validation_ap', bbox_inches='tight')
+# plt.clf()  
 
 # 3. randomize condition (for classifier-free guidance)
 # use_uncond = (torch.rand(batch_size, device=device) < p_uncond)
