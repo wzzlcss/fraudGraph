@@ -168,7 +168,8 @@ def eval_static(seq):
         raw_node_feature=feat.to(device), 
         raw_edge_feature=torch.zeros(cond_len + infer_len, 1).to(device))
     model[0].set_neighbor_sampler(train_neighbor_sampler)
-    # test on validation seq
+    # test on validation seq, for static eval, remove duplicate
+    output_edge = keep_unique(output_edge)
     pos_src, pos_dst = output_edge[0], output_edge[1]
     neg_src, neg_dst = all_negatives[0], all_negatives[1]
     # create time variable to ensure that only graph constructed from S1 is visible

@@ -184,7 +184,8 @@ def eval_static(seq):
             edge_ids=np.array([eid]), 
             edges_are_positive=True,
             num_neighbors=args.num_neighbors)
-    # test on validation seq
+    # test on validation seq, for static eval, remove duplicate
+    output_edge = keep_unique(output_edge)
     pos_src, pos_dst = output_edge[0], output_edge[1]
     neg_src, neg_dst = all_negatives[0], all_negatives[1]
     # create time variable to ensure that only graph constructed from S1 is visible
