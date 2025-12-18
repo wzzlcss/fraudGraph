@@ -38,20 +38,24 @@ def event_iter_to_seq_pair(data_iter):
         eventSeq.append(list(seq.numpy()))
     return eventSeq_pair, eventSeq
 
+def to_dataloader(data_iter):
+    data, eventSeq = event_iter_to_seq_pair(data_iter)
+    dataset = LogGraphDatasetAdjPair(data)
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=1, collate_fn=dataset.collate)
+    return dataloader
+
 def prepare_seq(data_name="amazon"):
     train_iter, vocab_size = load_event(data_name, mode="train")
-    test_iter, test_size_2 = load_event(data_name, mode="test")
-    assert test_size_2==vocab_size, "vocab size in training and validation does not match"
+    valid_iter, valid_size = load_event(data_name, mode="dev")
+    test_iter, test_size = load_event(data_name, mode="test")
+    assert (test_size==vocab_size) and (valid_size==vocab_size), "vocab size does not match"
     emb_path = f'eventSeq/my_exp/train_bert_embedding/{data_name}/exp3/embedding.pt'
     feat = torch.load(emb_path)
     n = feat.shape[0] # size of embedding table
-    train_data, train_eventSeq = event_iter_to_seq_pair(train_iter)
-    train_set = LogGraphDatasetAdjPair(train_data)
-    train_dataloader = DataLoader(train_set, batch_size=1, num_workers=1, collate_fn=train_set.collate)
-    valid_data, valid_eventSeq = event_iter_to_seq_pair(test_iter)
-    valid_set = LogGraphDatasetAdjPair(valid_data)
-    valid_dataloader = DataLoader(valid_set, batch_size=1, num_workers=1, collate_fn=valid_set.collate)
-    return train_dataloader, valid_dataloader, train_eventSeq, valid_eventSeq, feat, n
+    train_dataloader = to_dataloader(train_iter)
+    valid_dataloader = to_dataloader(valid_iter)
+    test_dataloader = to_dataloader(test_iter)
+    return train_dataloader, valid_dataloader, test_dataloader, feat, n
 
 def to_dataloader_adj(data_iter, n, batch_size):
     data, eventSeq = event_iter_to_seq_pair(data_iter)
