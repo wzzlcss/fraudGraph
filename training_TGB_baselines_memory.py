@@ -311,7 +311,7 @@ for epoch in range(args.num_epochs):
             optimizer.zero_grad()
             running_loss = running_loss / args.batch_size # avg batch loss
             train_loss.append(running_loss)
-            print(f"Avg Batch Loss ({step} / {n_train_sample}): {running_loss}")
+            logging.info(f"Avg Batch Loss ({step} / {n_train_sample}): {running_loss}")
             running_loss = 0.0
     # validation after each epoch
     model.eval()
@@ -333,4 +333,6 @@ res = {
 
 filename = f"{output_path}/{args.dataset_name}_{args.model_name}.pt"
 torch.save(res, filename)
+
+
 

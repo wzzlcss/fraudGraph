@@ -123,10 +123,9 @@ res = {
 filename = f"{output_path}/{args.dataset_name}_{args.model_name}.pt"
 torch.save(res, filename)
 
-
 # import matplotlib.pyplot as plt
 
-# idx = [i for i in range(len(valid_auc))]
+# idx = [i for i in range(len(valid_auc_list))]
 
 # plt.clf()  
 # plt.plot(idx, valid_auc)
